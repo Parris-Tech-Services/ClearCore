@@ -27,10 +27,11 @@
     { id: '1pQo6Aehk5wfYOAxqNOrMi', title: 'The Role of the Bible', show: 'Sabbath School with Dwain Esmond', tags: ['bible', 'formation'] }
   ];
 
-  const STATE_KEY = 'clearcore-podcast-v1';
+  const STATE_KEY = 'clearcore-podcast-v2';
   let current = 0;
   let expanded = false;
   let visible = true;
+  let loadedEpisode = null;
 
   try {
     const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
@@ -54,10 +55,11 @@
     #cc-podcast-root{position:relative;z-index:2147483000;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
     #cc-podcast-launcher{position:fixed;right:12px;bottom:max(78px,calc(66px + env(safe-area-inset-bottom)));z-index:2147483001;border:1px solid rgba(16,185,129,.45);border-radius:999px;background:rgba(255,255,255,.96);color:#047857;padding:10px 15px;font:700 13px/1.2 Inter,system-ui,sans-serif;box-shadow:0 10px 30px rgba(15,23,42,.18);cursor:pointer;touch-action:manipulation;backdrop-filter:blur(10px)}
     #cc-podcast-restore{position:fixed;right:8px;bottom:max(78px,calc(66px + env(safe-area-inset-bottom)));z-index:2147483001;width:34px;height:34px;border:1px solid rgba(16,185,129,.35);border-radius:10px;background:rgba(255,255,255,.74);color:#047857;font-size:16px;opacity:.46;cursor:pointer;touch-action:manipulation;backdrop-filter:blur(8px)}
-    #cc-podcast-panel{position:fixed;right:8px;bottom:max(76px,calc(64px + env(safe-area-inset-bottom)));z-index:2147483002;width:min(520px,calc(100vw - 16px));box-sizing:border-box;border:1px solid rgba(16,185,129,.28);border-radius:18px;background:rgba(255,255,255,.985);color:#0f172a;padding:13px;box-shadow:0 20px 55px rgba(15,23,42,.24);backdrop-filter:blur(12px)}
-    #cc-podcast-live-frame{position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:.001;pointer-events:none}
-    #cc-podcast-live-frame.cc-visible-frame{position:static;left:auto;top:auto;width:100%;height:152px;opacity:1;pointer-events:auto;border:0;border-radius:12px;background:#f1f5f9;margin-top:10px}
+    #cc-podcast-panel{position:fixed;right:8px;bottom:max(76px,calc(64px + env(safe-area-inset-bottom)));z-index:2147483002;width:min(520px,calc(100vw - 16px));box-sizing:border-box;border:1px solid rgba(16,185,129,.28);border-radius:18px;background:rgba(255,255,255,.985);color:#0f172a;padding:13px;box-shadow:0 20px 55px rgba(15,23,42,.24);backdrop-filter:blur(12px);transition:opacity .14s ease,transform .14s ease}
+    #cc-podcast-panel.cc-panel-collapsed{opacity:0;pointer-events:none;transform:translateY(24px) scale(.98);visibility:hidden}
+    #cc-podcast-live-frame{display:block;width:100%;height:152px;border:0;border-radius:12px;background:#f1f5f9;margin-top:10px}
     .cc-head{display:flex;gap:10px;justify-content:space-between;align-items:flex-start}.cc-kicker{color:#059669;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.cc-title{font-size:15px;line-height:1.3;margin:4px 0 0;color:#0f172a}.cc-meta{font-size:11px;color:#64748b;margin:5px 0 0}.cc-close{width:38px;height:38px;flex:0 0 38px;border-radius:10px;border:1px solid #dbe5df;background:#f8fafc;color:#334155;font-size:21px;cursor:pointer}.cc-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.cc-actions button,.cc-actions a{border-radius:10px;padding:9px 11px;font:700 12px/1.2 Inter,system-ui,sans-serif;text-decoration:none;cursor:pointer}.cc-next{border:0;background:#059669;color:#fff}.cc-open{display:inline-flex;align-items:center;border:1px solid #d8e7df;background:#f0fdf4;color:#047857}.cc-hide{border:1px solid #e2e8f0;background:#fff;color:#64748b}.cc-note{font-size:10px;line-height:1.45;color:#64748b;margin:8px 0 0}
+    .cc-hidden{display:none!important}
     @media (prefers-color-scheme:dark){#cc-podcast-launcher,#cc-podcast-restore{background:rgba(15,23,42,.94);color:#6ee7b7;border-color:rgba(52,211,153,.35)}#cc-podcast-panel{background:rgba(15,23,42,.985);color:#e2e8f0;border-color:rgba(52,211,153,.28)}.cc-title{color:#f8fafc}.cc-meta,.cc-note{color:#94a3b8}.cc-close{background:#111827;color:#e5e7eb;border-color:#334155}.cc-open{background:#10251e;color:#6ee7b7;border-color:#275a46}.cc-hide{background:#111827;color:#cbd5e1;border-color:#334155}}
     @media(max-width:640px){#cc-podcast-panel{right:4px;width:calc(100vw - 8px);padding:10px}.cc-actions>*{flex:1;justify-content:center;text-align:center}}
   `;
@@ -65,84 +67,87 @@
 
   const root = document.createElement('div');
   root.id = 'cc-podcast-root';
+  root.innerHTML = `
+    <button id="cc-podcast-launcher" type="button" aria-label="Open ClearCore podcasts">🎧 Podcasts</button>
+    <button id="cc-podcast-restore" class="cc-hidden" type="button" aria-label="Show podcasts" title="Show podcasts">🎧</button>
+    <aside id="cc-podcast-panel" class="cc-panel-collapsed" aria-label="ClearCore podcast player" aria-hidden="true">
+      <div class="cc-head">
+        <div>
+          <div class="cc-kicker">ClearCore · faith / formation</div>
+          <h2 class="cc-title"></h2>
+          <p class="cc-meta"></p>
+        </div>
+        <button class="cc-close" type="button" aria-label="Collapse podcast controls">×</button>
+      </div>
+      <iframe id="cc-podcast-live-frame" title="ClearCore Spotify podcast episode" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>
+      <div class="cc-actions">
+        <button class="cc-next" type="button">🎲 Different podcast</button>
+        <a class="cc-open" target="_blank" rel="noopener noreferrer">Open in Spotify ↗</a>
+        <button class="cc-hide" type="button">Hide podcasts</button>
+      </div>
+      <p class="cc-note">25 episodes about prayer, discipleship, rest, temptation and spiritual formation. Closing or hiding the controls keeps the same Spotify iframe alive, so playback can continue while you use ClearCore.</p>
+    </aside>`;
   document.body.appendChild(root);
 
-  const frame = document.createElement('iframe');
-  frame.id = 'cc-podcast-live-frame';
-  frame.title = 'ClearCore Spotify podcast episode';
-  frame.loading = 'lazy';
-  frame.setAttribute('allow', 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture');
-  document.body.appendChild(frame);
+  const launcher = root.querySelector('#cc-podcast-launcher');
+  const restore = root.querySelector('#cc-podcast-restore');
+  const panel = root.querySelector('#cc-podcast-panel');
+  const frame = root.querySelector('#cc-podcast-live-frame');
+  const title = root.querySelector('.cc-title');
+  const meta = root.querySelector('.cc-meta');
+  const openLink = root.querySelector('.cc-open');
 
-  let loadedEpisode = null;
+  function updateEpisodeUi() {
+    const episode = episodes[current];
+    title.textContent = episode.title;
+    meta.textContent = `${episode.show} · ${episode.tags.join(' · ')}`;
+    openLink.href = `https://open.spotify.com/episode/${encodeURIComponent(episode.id)}`;
+  }
 
   function loadCurrent(force = false) {
     const episode = episodes[current];
+    updateEpisodeUi();
     if (!force && loadedEpisode === episode.id) return;
     loadedEpisode = episode.id;
     frame.src = `https://open.spotify.com/embed/episode/${encodeURIComponent(episode.id)}?theme=0`;
     frame.title = `Spotify episode: ${episode.title}`;
   }
 
-  function setVisible(next) {
-    visible = !!next;
-    if (!visible) expanded = false;
-    persist();
-    render();
+  function syncUi() {
+    launcher.classList.toggle('cc-hidden', !visible || expanded);
+    restore.classList.toggle('cc-hidden', visible);
+    panel.classList.toggle('cc-panel-collapsed', !visible || !expanded);
+    panel.setAttribute('aria-hidden', (!visible || !expanded) ? 'true' : 'false');
   }
 
   function openPlayer() {
     loadCurrent();
     expanded = true;
-    render();
+    syncUi();
   }
 
-  function render() {
-    frame.classList.toggle('cc-visible-frame', visible && expanded);
-
-    if (!visible) {
-      root.innerHTML = '<button id="cc-podcast-restore" type="button" aria-label="Show podcasts" title="Show podcasts">🎧</button>';
-      root.querySelector('#cc-podcast-restore').addEventListener('click', () => setVisible(true));
-      return;
-    }
-
-    if (!expanded) {
-      root.innerHTML = '<button id="cc-podcast-launcher" type="button" aria-label="Open ClearCore podcasts">🎧 Podcasts</button>';
-      root.querySelector('#cc-podcast-launcher').addEventListener('click', openPlayer);
-      return;
-    }
-
-    const episode = episodes[current];
-    root.innerHTML = `
-      <aside id="cc-podcast-panel" aria-label="ClearCore podcast player">
-        <div class="cc-head"><div><div class="cc-kicker">ClearCore · faith / formation</div><h2 class="cc-title"></h2><p class="cc-meta"></p></div><button class="cc-close" type="button" aria-label="Collapse podcast controls">×</button></div>
-        <div id="cc-frame-slot"></div>
-        <div class="cc-actions"><button class="cc-next" type="button">🎲 Different podcast</button><a class="cc-open" target="_blank" rel="noopener noreferrer">Open in Spotify ↗</a><button class="cc-hide" type="button">Hide podcasts</button></div>
-        <p class="cc-note">25 episodes about prayer, discipleship, rest, temptation and spiritual formation. Closing or hiding the controls keeps the current Spotify player alive. Podcasts are for reflection; ClearCore’s own SOS and accountability tools remain the priority when you need immediate support.</p>
-      </aside>`;
-
-    root.querySelector('.cc-title').textContent = episode.title;
-    root.querySelector('.cc-meta').textContent = `${episode.show} · ${episode.tags.join(' · ')}`;
-    root.querySelector('.cc-open').href = `https://open.spotify.com/episode/${encodeURIComponent(episode.id)}`;
-    root.querySelector('#cc-frame-slot').appendChild(frame);
-    frame.classList.add('cc-visible-frame');
-
-    root.querySelector('.cc-close').addEventListener('click', () => {
-      expanded = false;
-      document.body.appendChild(frame);
-      render();
-    });
-    root.querySelector('.cc-next').addEventListener('click', () => {
-      current = pickDifferent();
-      persist();
-      loadCurrent(true);
-      render();
-    });
-    root.querySelector('.cc-hide').addEventListener('click', () => {
-      document.body.appendChild(frame);
-      setVisible(false);
-    });
+  function collapsePlayer() {
+    expanded = false;
+    syncUi();
   }
 
-  render();
+  function setVisible(next) {
+    visible = !!next;
+    if (!visible) expanded = false;
+    persist();
+    syncUi();
+  }
+
+  launcher.addEventListener('click', openPlayer);
+  restore.addEventListener('click', () => setVisible(true));
+  root.querySelector('.cc-close').addEventListener('click', collapsePlayer);
+  root.querySelector('.cc-next').addEventListener('click', () => {
+    current = pickDifferent();
+    persist();
+    loadCurrent(true);
+  });
+  root.querySelector('.cc-hide').addEventListener('click', () => setVisible(false));
+
+  updateEpisodeUi();
+  syncUi();
 })();
