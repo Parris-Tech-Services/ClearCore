@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Router as WouterRouter } from "wouter";
 import { AppStateProvider } from "@/state/AppStateProvider";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
@@ -15,7 +15,7 @@ import Review from "@/pages/Review";
 import SlipResponse from "@/pages/SlipResponse";
 import AllPages from "@/pages/AllPages";
 
-function Router() {
+function AppRoutes() {
   return (
     <Switch>
       <Route path="/" component={Home} />
@@ -33,12 +33,17 @@ function Router() {
 }
 
 function App() {
+  const baseUrl = import.meta.env.BASE_URL || "/";
+  const routerBase = baseUrl === "/" ? undefined : baseUrl.replace(/\/$/, "");
+
   return (
-    <AppStateProvider>
-      <Toaster />
-      <FunControls />
-      <Router />
-    </AppStateProvider>
+    <WouterRouter base={routerBase}>
+      <AppStateProvider>
+        <Toaster />
+        <FunControls />
+        <AppRoutes />
+      </AppStateProvider>
+    </WouterRouter>
   );
 }
 
